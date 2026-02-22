@@ -29,23 +29,30 @@ let ytDlpWrap;
 
 // Initialize yt-dlp binary
 async function initYtDlp() {
-    if (!fs.existsSync(YTDLP_PATH)) {
-        console.log(`Downloading yt-dlp binary for ${process.platform}...`);
-        await YTDlpWrap.downloadFromGithub(YTDLP_PATH);
-        console.log('yt-dlp binary downloaded successfully.');
-    }
+    try {
+        if (!fs.existsSync(YTDLP_PATH)) {
+            console.log(`Downloading yt-dlp binary for ${process.platform}...`);
+            // By default, yt-dlp-wrap downloads the platform-specific binary.
+            // On Linux, we've added nixpacks.toml to ensure python3 is available.
+            await YTDlpWrap.downloadFromGithub(YTDLP_PATH);
+            console.log('yt-dlp binary downloaded successfully.');
+        }
 
-    // Fix permissions for Linux/macOS
-    if (!IS_WINDOWS) {
-        try {
+        // Fix permissions for Linux/macOS
+        if (!IS_WINDOWS) {
             console.log('Applying execution permissions to yt-dlp...');
             fs.chmodSync(YTDLP_PATH, '755');
-        } catch (err) {
-            console.error('Failed to set execution permissions:', err);
         }
-    }
 
-    ytDlpWrap = new YTDlpWrap(YTDLP_PATH);
+        ytDlpWrap = new YTDlpWrap(YTDLP_PATH);
+
+        // Verify it works
+        const version = await ytDlpWrap.getVersion();
+        console.log(`yt-dlp initialized version: ${version}`);
+    } catch (err) {
+        console.error('Failed to initialize yt-dlp:', err);
+        // Fallback or re-download logic could go here if needed
+    }
 }
 
 // Update this to your desired redirect URL
