@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Downloader - Premium Experience</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Video <span>Downloader</span></h1>
+            <p>Download your favorite content from TikTok, YouTube, and more.</p>
+        </header>
+
+        <main>
+            <div class="input-card">
+                <div class="input-group">
+                    <input type="text" id="videoUrl" placeholder="Paste video link here..." autocomplete="off">
+                    <button id="downloadBtn">Analyze Link</button>
+                </div>
+                <div id="loader" class="loader-container hidden">
+                    <div class="loader-bar">
+                        <div class="loader-progress"></div>
+                    </div>
+                    <p id="loaderStatus">Fetching video data...</p>
+                </div>
+                <div id="status" class="status-msg hidden"></div>
+            </div>
+
+            <div id="infoCard" class="info-card hidden">
+                <div class="video-header">
+                    <div class="video-preview">
+                        <img id="thumbnail" src="" alt="Video Thumbnail">
+                    </div>
+                    <div class="video-details">
+                        <h2 id="videoTitle">Video Title</h2>
+                        <p id="videoAuthor">@channel_name</p>
+                        <p id="videoDuration" class="meta-tag">00:00</p>
+                    </div>
+                </div>
+
+                <div class="format-selection">
+                    <h3>Select Quality</h3>
+                    <div id="formatList" class="format-list">
+                        <!-- Formats will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Furiã. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        const downloadBtn = document.getElementById('downloadBtn');
+        const videoUrl = document.getElementById('videoUrl');
+        const status = document.getElementById('status');
+        const infoCard = document.getElementById('infoCard');
+        const videoTitle = document.getElementById('videoTitle');
+        const thumbnail = document.getElementById('thumbnail');
+        const videoAuthor = document.getElementById('videoAuthor');
+        const videoDuration = document.getElementById('videoDuration');
+        const formatList = document.getElementById('formatList');
+        const loader = document.getElementById('loader');
+        const loaderProgress = document.querySelector('.loader-progress');
+
+        function showStatus(msg, type = 'info') {
+            status.textContent = msg;
+            status.className = `status-msg ${type}`;
+            status.classList.remove('hidden');
+            loader.classList.add('hidden');
+        }
+
+        function toggleLoader(show) {
+            if (show) {
+                loader.classList.remove('hidden');
+                status.classList.add('hidden');
+                infoCard.classList.add('hidden');
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress = (progress + 1) % 100;
+                    loaderProgress.style.width = progress + '%';
+                }, 50);
+                loader.dataset.interval = interval;
+            } else {
+                loader.classList.add('hidden');
+                clearInterval(loader.dataset.interval);
+            }
+        }
+
+        downloadBtn.addEventListener('click', async () => {
+            const url = videoUrl.value.trim();
+            if (!url) {
+                showStatus('Please enter a valid URL', 'error');
+                return;
+            }
+
+            toggleLoader(true);
+
+            try {
+                const response = await fetch(`/api/info?url=${encodeURIComponent(url)}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    toggleLoader(false);
+                    videoTitle.textContent = data.title;
+                    thumbnail.src = data.thumbnail;
+                    videoAuthor.textContent = data.uploader || 'Unknown Creator';
+                    videoDuration.textContent = data.duration || 'N/A';
+
+                    // Render formats
+                    formatList.innerHTML = '';
+                    if (data.formats && data.formats.length > 0) {
+                        data.formats.forEach(f => {
+                            const item = document.createElement('div');
+                            item.className = 'format-item';
+                            // Hidden file size as requested
+                            item.innerHTML = `
+                                <div class="format-info">
+                                    <span class="res">${f.resolution === 'Audio Only' ? 'Audio Only (MP3)' : f.resolution + ' (' + f.extension + ')'}</span>
+                                    <span class="type">${f.quality_label}</span>
+                                </div>
+                                <button class="btn-sm" onclick="downloadVideo('${f.format_id}')">Download</button>
+                            `;
+                            formatList.appendChild(item);
+                        });
+                    } else {
+                        const item = document.createElement('div');
+                        item.className = 'format-item';
+                        item.innerHTML = `
+                            <div class="format-info">
+                                <span class="res">Default High Quality</span>
+                                <span class="type">Auto-format</span>
+                            </div>
+                            <button class="btn-sm" onclick="downloadVideo('best')">Download</button>
+                        `;
+                        formatList.appendChild(item);
+                    }
+
+                    infoCard.classList.remove('hidden');
+                } else {
+                    showStatus(data.error || 'Failed to fetch video info', 'error');
+                }
+            } catch (err) {
+                showStatus('Connection error. Please try again.', 'error');
+            }
+        });
+
+        function downloadVideo(formatId) {
+            const url = videoUrl.value.trim();
+            window.location.href = `/api/download?url=${encodeURIComponent(url)}&format=${formatId}`;
+        }
+    </script>
+</body>
+
+</html>
