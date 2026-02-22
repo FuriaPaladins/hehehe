@@ -19,17 +19,32 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 const PORT = process.env.PORT || 3000;
-const YTDLP_PATH = path.join(__dirname, 'yt-dlp.exe');
+
+// OS detection for binary naming
+const IS_WINDOWS = process.platform === 'win32';
+const BINARY_NAME = IS_WINDOWS ? 'yt-dlp.exe' : 'yt-dlp';
+const YTDLP_PATH = path.join(__dirname, BINARY_NAME);
 
 let ytDlpWrap;
 
 // Initialize yt-dlp binary
 async function initYtDlp() {
     if (!fs.existsSync(YTDLP_PATH)) {
-        console.log('Downloading yt-dlp binary...');
+        console.log(`Downloading yt-dlp binary for ${process.platform}...`);
         await YTDlpWrap.downloadFromGithub(YTDLP_PATH);
         console.log('yt-dlp binary downloaded successfully.');
     }
+
+    // Fix permissions for Linux/macOS
+    if (!IS_WINDOWS) {
+        try {
+            console.log('Applying execution permissions to yt-dlp...');
+            fs.chmodSync(YTDLP_PATH, '755');
+        } catch (err) {
+            console.error('Failed to set execution permissions:', err);
+        }
+    }
+
     ytDlpWrap = new YTDlpWrap(YTDLP_PATH);
 }
 
@@ -95,7 +110,6 @@ app.get('/api/download', async (req, res) => {
     try {
         console.log(`Preparing download for: ${videoUrl} [Format: ${formatId}]`);
 
-        // Fetch metadata again to get filesystem info/content length if possible
         const metadata = await ytDlpWrap.getVideoInfo([
             videoUrl,
             '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -122,9 +136,6 @@ app.get('/api/download', async (req, res) => {
             args.push('-f', formatId === 'best' ? 'bestvideo+bestaudio/best' : `${formatId}+bestaudio/best`);
         }
 
-        // Try to estimate content-length (approximate for merged streams)
-        // yt-dlp doesn't provide exact content length for piped streams unless downloaded fully.
-        // But we can try to find the format size in metadata.
         const targetFormat = metadata.formats.find(f => f.format_id === formatId);
         if (targetFormat && (targetFormat.filesize || targetFormat.filesize_approx)) {
             res.header('Content-Length', targetFormat.filesize || targetFormat.filesize_approx);
